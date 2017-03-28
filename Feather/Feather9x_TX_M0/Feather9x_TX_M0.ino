@@ -9,7 +9,10 @@
 #include <SPI.h>
 #include <RH_RF95.h>
 #include <Wire.h>
-#include <Adafruit_GFX.h>
+#include <Adafruit_FeatherOLED.h>
+#include <Adafruit_FeatherOLED_WiFi.h>
+//#include <Adafruit_GFX.h>
+
 #include <Adafruit_SSD1306.h>
 #include <Adafruit_MCP9808.h>
 #include <ArduinoJson.h>
@@ -34,7 +37,8 @@ RH_RF95 rf95(RFM95_CS, RFM95_INT);
 #define VBATPIN A7
 
 //display
-Adafruit_SSD1306 display = Adafruit_SSD1306();
+//Adafruit_SSD1306 display = Adafruit_SSD1306();
+Adafruit_FeatherOLED_WiFi oled = Adafruit_FeatherOLED_WiFi();
 
 #if (SSD1306_LCDHEIGHT != 32)
  #error("Height incorrect, please fix Adafruit_SSD1306.h!");
@@ -83,6 +87,9 @@ void setup()
   delay(100);
 
   //Serial.println("Setting up the OLED");
+  /***************************************************************************************
+   * replace code with oled_wifi
+   
   // by default, we'll generate the high voltage from the 3.3v line internally! (neat!)
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C);  // initialize with the I2C addr 0x3C (for the 128x32)
  
@@ -92,16 +99,35 @@ void setup()
   display.setTextSize(1);
   display.setTextColor(WHITE);
   display.setCursor(0,0);
-
+  */
+  /******************************************************************************************8
+   * Setup the OLED display
+   */
+  oled.init();
+  oled.setBatteryVisible(false);
+  oled.clearDisplay();
+  oled.refreshIcons();
+  oled.clearMsgArea();  
+  oled.println("Initialize MCP9808 ...");
+  oled.display();
+  
   // Make sure the sensor is found, you can also pass in a different i2c
   // address with tempsensor.begin(0x19) for example
   if (!tempsensor.begin()) {
-    display.println("Couldn't find MCP9808!");
+    oled.println("Couldn't find MCP9808!");
+    oled.display();
+
+    //display.println("Couldn't find MCP9808!");
     while (1);
   }
 
 
-  display.println("Feather LoRa TX Test!");
+  //display.println("Feather LoRa TX Test!");
+  oled.refreshIcons();
+  oled.clearMsgArea();  
+  oled.println("Feather LoRa TX Test!");
+  oled.display();
+
 
   // manual reset
   digitalWrite(RFM95_RST, LOW);
@@ -111,8 +137,13 @@ void setup()
 
   while (!rf95.init()) {
     Serial.println("LoRa radio init failed");
-    display.println("LoRa radio init failed");
-    display.display();
+    //display.println("LoRa radio init failed");
+    //display.display();
+    oled.refreshIcons();
+    oled.clearMsgArea();  
+    oled.println("LoRa radio init failed");
+    oled.display();
+
     while (1);
   }
   // Serial.println("LoRa radio init OK!");
@@ -121,18 +152,28 @@ void setup()
   // Defaults after init are 434.0MHz, modulation GFSK_Rb250Fd250, +13dbM
   if (!rf95.setFrequency(RF95_FREQ)) {
     Serial.println("setFrequency failed");
-    display.println("setFrequency failed");
-    display.display();
+    //display.println("setFrequency failed");
+    //display.display();
+    oled.refreshIcons();
+    oled.clearMsgArea();  
+    oled.println("setFrequency failed");
+    oled.display();
+
     while (1);
   }
   Serial.print("Set Freq to: "); Serial.println(RF95_FREQ);
-  display.print("Set Freq to: "); display.println(RF95_FREQ);
+  //display.print("Set Freq to: "); display.println(RF95_FREQ);
+  oled.refreshIcons();
+  oled.clearMsgArea();  
+  oled.print("Set Freq to: "); oled.println(RF95_FREQ);
+  oled.display();
+  
 
   // The default transmitter power is 13dBm, using PA_BOOST.
   // If you are using RFM95/96/97/98 modules which uses the PA_BOOST transmitter pin, then 
   // you can set transmitter powers from 5 to 23 dBm:
   rf95.setTxPower(23, false);
-  display.display();
+  //display.display();
   delay(10000);
 }
 //*************************************************************************
@@ -153,9 +194,9 @@ void loop()
   Serial.println(temp.asString());
   Serial.println(temp.asJsonStr());
   // Send a message to rf95_server
-  
-  display.clearDisplay();
-  display.setCursor(0,0);
+
+  //display.clearDisplay();
+  //display.setCursor(0,0);
 
   float measuredvbat = analogRead(VBATPIN);
   measuredvbat *= 2;    // we divided by 2, so multiply back
@@ -164,8 +205,15 @@ void loop()
   Sensor bat("bat", measuredvbat, "V");
   Serial.println(bat.asString());
   Serial.println(bat.asJsonStr());
-  display.println(bat.asString());
-  display.println(temp.asString());
+  //display.println(bat.asString());
+  //display.println(temp.asString());
+
+  oled.refreshIcons();
+  oled.clearMsgArea();  
+  oled.println(bat.asString()); 
+  oled.println(temp.asString());
+  oled.display();
+
 
   Serial.println("Sending to rf95_server");
 
@@ -173,7 +221,7 @@ void loop()
   rf95.send((uint8_t *)strSend.c_str(), strSend.length());
   Serial.println(strSend);
   //display.println(strSend);
-  display.display();
+  //display.display();
 
   Serial.println("Waiting for packet to complete..."); delay(10);
   rf95.waitPacketSent();
@@ -188,9 +236,10 @@ void loop()
     if (rf95.recv(buf, &len))
    {
       Serial.println((char*)buf);
-      display.println((char*)buf);
+      //display.println((char*)buf);
       Serial.print("RSSI: ");
-      Serial.println(rf95.lastRssi(), DEC);    
+      Serial.println(rf95.lastRssi(), DEC); 
+      oled.setRSSI(rf95.lastRssi());   
     }
     else
     {
@@ -200,8 +249,8 @@ void loop()
   else
   {
     Serial.println("No reply, is there a listener around?");
-    display.println("No reply!");
+    //display.println("No reply!");
   }
-  display.display();
+  //display.display();
   delay(5000);
 }
