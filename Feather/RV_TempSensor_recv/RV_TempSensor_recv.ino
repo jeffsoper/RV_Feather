@@ -5,8 +5,11 @@
 #include <Adafruit_MCP9808.h>
 #include "Adafruit_LEDBackpack.h"
 #include "Adafruit_GFX.h"
+#include <Adafruit_FeatherOLED.h>
+#include <Adafruit_FeatherOLED_WiFi.h>
 
 Adafruit_7segment matrix = Adafruit_7segment();
+Adafruit_FeatherOLED_WiFi oled = Adafruit_FeatherOLED_WiFi();
 
 /*******************************************************
    define constances and singleton items
@@ -108,10 +111,28 @@ void setup() {
   Serial.begin(9600);
   delay(100);
 
+  /******************************************************************************************8
+   * Setup the OLED display
+   */
+  oled.init();
+  oled.setBatteryVisible(false);
+  oled.setIPAddressVisible(false);
+  oled.setRSSIVisible(false);
+  oled.setConnected(true);  //must be set true to disply RSSI6
+  oled.setConnectedVisible(false);
+  oled.clearDisplay();
+  oled.refreshIcons();
+  oled.clearMsgArea();  
+  oled.println("Initialize MCP9808 ...");
+  oled.display();
+   
+
   // Make sure the sensor is found, you can also pass in a different i2c
   // address with tempsensor.begin(0x19) for example
   if (!tempsensor.begin()) {
-    Serial.println("Couldn't find MCP9808!");
+    oled.clearMsgArea();  
+    oled.println("Couldn't find MCP9808!");
+    oled.display();
     while (1);
   }
 
@@ -129,6 +150,10 @@ void setup() {
 
   while (!rf95.init()) {
     Serial.println("LoRa radio init failed");
+    oled.refreshIcons();
+    oled.clearMsgArea();  
+    oled.println("LoRa radio init failed");
+    oled.display();
     while (1);
   }
 
@@ -138,15 +163,28 @@ void setup() {
   */
   if (!rf95.setFrequency(RF95_FREQ)) {
     Serial.println("setFrequency failed");
+    oled.refreshIcons();
+    oled.clearMsgArea();  
+    oled.println("setFrequency failed");
+    oled.display();
+
     while (1);
   }
   Serial.print("Set Freq to: "); Serial.println(RF95_FREQ);
+  oled.refreshIcons();
+  oled.clearMsgArea();  
+  oled.print("Set Freq to: "); oled.println(RF95_FREQ);
+  oled.display();
+  
 
   /***************************************
     you can set transmitter powers from 5 to 23 dBm:
   */
   rf95.setTxPower(23, false);
   delay(1000);
+  oled.setBatteryVisible(true);
+  oled.setRSSIVisible(true);  
+
 
   matrix.begin(0x70);
 
@@ -181,6 +219,17 @@ void loop() {
   uint8_t len = sizeof(buf);
   StaticJsonBuffer<200> jsonBuffer;
 
+  float measuredvbat = analogRead(VBATPIN);
+  measuredvbat *= 2;    // we divided by 2, so multiply back
+  measuredvbat *= 3.3;  // Multiply by 3.3V, our reference voltage
+  measuredvbat /= 1024; // convert to voltage
+  oled.setBattery(measuredvbat); 
+  oled.refreshIcons();
+  oled.clearMsgArea();  
+  oled.println("Waiting for temp");
+  oled.display();
+
+
   Serial.println("Waiting for temp"); delay(10);
   if (rf95.waitAvailableTimeout(1000))
   {
@@ -190,10 +239,18 @@ void loop() {
       Serial.println((char*)buf);
       Serial.print("RSSI: ");
       Serial.println(rf95.lastRssi(), DEC);
+      oled.setRSSI((int) rf95.lastRssi());  
+      oled.refreshIcons();
+
  
       JsonObject& root = jsonBuffer.parseObject((char*)buf);
       if (!root.success()) {
         Serial.println("parseObject() failed");
+        oled.refreshIcons();
+        oled.clearMsgArea();  
+        oled.println("parseObject() failed");
+        oled.display();
+
         return;
       }
       
@@ -201,6 +258,10 @@ void loop() {
       Sensor sensor1(root["sensors"][0]);
       Sensor sensor2(root["sensors"][1]);
       
+      oled.refreshIcons();
+      oled.clearMsgArea();  
+      oled.print("Temp: ");oled.print(sensor1.getData());oled.println(" F");
+      oled.display();
       
       matrix.print(sensor1.getData());
       matrix.writeDisplay();
@@ -210,11 +271,20 @@ void loop() {
     else
     {
       Serial.println("Receive failed");
+      oled.refreshIcons();
+      oled.clearMsgArea();  
+      oled.println("Receive failed");
+      oled.display();
+      
     }
   }
   else
   {
     Serial.println("No reply, is there a listener around?");
+    oled.refreshIcons();
+    oled.clearMsgArea();  
+    oled.println("No reply, is there a listener around?");
+    oled.display();
   }
   delay(5000);
 

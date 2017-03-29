@@ -214,7 +214,7 @@ void loop()
       Serial.println((char*)buf);
       Serial.print("RSSI: ");
       Serial.println(rf95.lastRssi(), DEC); 
-      oled.setRSSI(rf95.lastRssi());   
+      oled.setRSSI((int)rf95.lastRssi());   
     }
     else
     {
