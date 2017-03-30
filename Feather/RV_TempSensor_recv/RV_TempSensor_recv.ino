@@ -1,14 +1,21 @@
+/*********************************************************************************
+ * RV Temprature Sensor Reciever
+ * 
+ * This application utilized the Adafuit Feather Wing OLED display and an 7 segment 
+ * display.  It recieves the temprature and batter level from the sending uinit.
+ */
+
 #include <SPI.h>
 #include <RH_RF95.h>
 #include <Wire.h>
 #include <ArduinoJson.h>
 #include <Adafruit_MCP9808.h>
-#include "Adafruit_LEDBackpack.h"
-#include "Adafruit_GFX.h"
 #include <Adafruit_FeatherOLED.h>
 #include <Adafruit_FeatherOLED_WiFi.h>
-
-Adafruit_7segment matrix = Adafruit_7segment();
+//#include <Adafruit_LEDBackpack.h>
+//#include <Adafruit_GFX.h>
+//
+//Adafruit_7segment matrix = Adafruit_7segment();
 Adafruit_FeatherOLED_WiFi oled = Adafruit_FeatherOLED_WiFi();
 
 /*******************************************************
@@ -116,21 +123,23 @@ void setup() {
    */
   oled.init();
   oled.setBatteryVisible(false);
+  oled.setBatteryText(false);
   oled.setIPAddressVisible(false);
   oled.setRSSIVisible(false);
+  oled.setRSSIIconVisible(false);
   oled.setConnected(true);  //must be set true to disply RSSI6
   oled.setConnectedVisible(false);
   oled.clearDisplay();
   oled.refreshIcons();
   oled.clearMsgArea();  
-  oled.println("Initialize MCP9808 ...");
+  oled.println("Initialize MCP9808...");
   oled.display();
    
 
   // Make sure the sensor is found, you can also pass in a different i2c
   // address with tempsensor.begin(0x19) for example
-  if (!tempsensor.begin()) {
-    oled.clearMsgArea();  
+  if (!tempsensor.begin(0x18)) {
+    oled.clearStatArea();  
     oled.println("Couldn't find MCP9808!");
     oled.display();
     while (1);
@@ -142,7 +151,10 @@ void setup() {
   */
 
   // manual resetradio
-  Serial.println("...reset radio");
+  //Serial.println("...reset radio");
+  oled.clearMsgArea();  
+  oled.println("...reset radio");
+  oled.display();
   digitalWrite(RFM95_RST, LOW);
   delay(10);
   digitalWrite(RFM95_RST, HIGH);
@@ -150,8 +162,7 @@ void setup() {
 
   while (!rf95.init()) {
     Serial.println("LoRa radio init failed");
-    oled.refreshIcons();
-    oled.clearMsgArea();  
+    oled.clearStatArea();  
     oled.println("LoRa radio init failed");
     oled.display();
     while (1);
@@ -161,20 +172,20 @@ void setup() {
      Defaults after init are 434.0MHz,
      modulation GFSK_Rb250Fd250, +13dbM
   */
+  //oled.refreshIcons();
+  oled.clearMsgArea();  
+  oled.print("Set Freq to: "); oled.println(RF95_FREQ);
+  oled.display();
   if (!rf95.setFrequency(RF95_FREQ)) {
     Serial.println("setFrequency failed");
-    oled.refreshIcons();
-    oled.clearMsgArea();  
+    //oled.refreshIcons();
+    oled.clearStatArea();  
     oled.println("setFrequency failed");
     oled.display();
 
     while (1);
   }
-  Serial.print("Set Freq to: "); Serial.println(RF95_FREQ);
-  oled.refreshIcons();
-  oled.clearMsgArea();  
-  oled.print("Set Freq to: "); oled.println(RF95_FREQ);
-  oled.display();
+  //Serial.print("Set Freq to: "); Serial.println(RF95_FREQ);
   
 
   /***************************************
@@ -182,15 +193,18 @@ void setup() {
   */
   rf95.setTxPower(23, false);
   delay(1000);
+  
   oled.setBatteryVisible(true);
-  oled.setRSSIVisible(true);  
+  oled.setRSSIIconVisible(true);  
 
-
-  matrix.begin(0x70);
-
-  // print a floating point 
-  matrix.print(00.01);
-  matrix.writeDisplay();
+//  /*************************************
+//   * Setup Matrix
+//   */
+//  matrix.begin(0x70);
+//
+//  // print a floating point 
+//  matrix.print(00.01);
+//  matrix.writeDisplay();
   delay(500);
 
 }
@@ -198,19 +212,28 @@ void setup() {
 void loop() {
   //***********************************************************************************************
   //TEMP TEST CODE REPLACE WHEN RECIEVER IS WORKING.
-//  Serial.println("wake up MCP9808.... "); // wake up MSP9808 - power consumption ~200 mikro Ampere
-//  tempsensor.shutdown_wake(0);   // Don't remove this line! required before reading temp
-//  delay(10);
-//  // Read and print out the temperature, then convert to *F
-//  float c = tempsensor.readTempC();
-//  float f = c * 9.0 / 5.0 + 32;
-//  Sensor temp("temp", f, "F");
-//  Serial.print("F "); Serial.println(f);
-//  Serial.print("C "); Serial.println(c);
-//  
-//  Serial.println(temp.asString());
+  tempsensor.shutdown_wake(0);   // Don't remove this line! required before reading temp
+  delay(10);
+  // Read  the temperature, then convert to *F
+  float c = tempsensor.readTempC();
+  float f = c * 9.0 / 5.0 + 32;
+
+  oled.clearStatArea();
+  oled.print("Local Temp: ");oled.print(f);oled.println(" F");
+  oled.display();
+  
   //*************************************************************************************************
 
+
+  float measuredvbat = analogRead(VBATPIN);
+  measuredvbat *= 2;    // we divided by 2, so multiply back
+  measuredvbat *= 3.3;  // Multiply by 3.3V, our reference voltage
+  measuredvbat /= 1024; // convert to voltage
+  oled.setBattery(measuredvbat); 
+//  oled.clearMsgArea();  
+//  oled.println("Waiting remote for temp");
+//  oled.display();
+  oled.refreshIcons(false);
 
 /****************************************************************************************************
  * Get temp from radio
@@ -219,36 +242,28 @@ void loop() {
   uint8_t len = sizeof(buf);
   StaticJsonBuffer<200> jsonBuffer;
 
-  float measuredvbat = analogRead(VBATPIN);
-  measuredvbat *= 2;    // we divided by 2, so multiply back
-  measuredvbat *= 3.3;  // Multiply by 3.3V, our reference voltage
-  measuredvbat /= 1024; // convert to voltage
-  oled.setBattery(measuredvbat); 
-  oled.refreshIcons();
-  oled.clearMsgArea();  
-  oled.println("Waiting for temp");
-  oled.display();
 
-
-  Serial.println("Waiting for temp"); delay(10);
+  //Serial.println("Waiting for temp"); delay(10);
   if (rf95.waitAvailableTimeout(1000))
   {
     // Should be a reply message for us now
     if (rf95.recv(buf, &len))
     {
-      Serial.println((char*)buf);
-      Serial.print("RSSI: ");
-      Serial.println(rf95.lastRssi(), DEC);
+      //Serial.println((char*)buf);
+      //Serial.print("RSSI: ");
+      //Serial.println(rf95.lastRssi(), DEC);
       oled.setRSSI((int) rf95.lastRssi());  
-      oled.refreshIcons();
+      oled.refreshIcons(false);
 
  
       JsonObject& root = jsonBuffer.parseObject((char*)buf);
       if (!root.success()) {
-        Serial.println("parseObject() failed");
-        oled.refreshIcons();
+        //Serial.println("parseObject() failed");
+        //oled.refreshIcons(false);
         oled.clearMsgArea();  
         oled.println("parseObject() failed");
+        oled.clearStatArea();
+        oled.println("system halted....");
         oled.display();
 
         return;
@@ -258,21 +273,22 @@ void loop() {
       Sensor sensor1(root["sensors"][0]);
       Sensor sensor2(root["sensors"][1]);
       
-      oled.refreshIcons();
+      oled.refreshIcons(false);
       oled.clearMsgArea();  
-      oled.print("Temp: ");oled.print(sensor1.getData());oled.println(" F");
+      oled.print("Temp:");oled.print(sensor1.getData());oled.print("F ");
+      oled.print("Bat:");oled.print(sensor2.getData());oled.println("V");
       oled.display();
-      
-      matrix.print(sensor1.getData());
-      matrix.writeDisplay();
+//      
+//      matrix.print(sensor1.getData());
+//      matrix.writeDisplay();
       delay(1500);
 
     }
     else
     {
-      Serial.println("Receive failed");
-      oled.refreshIcons();
-      oled.clearMsgArea();  
+      //Serial.println("Receive failed");
+      oled.refreshIcons(false);
+      oled.clearStatArea();  
       oled.println("Receive failed");
       oled.display();
       
@@ -280,10 +296,10 @@ void loop() {
   }
   else
   {
-    Serial.println("No reply, is there a listener around?");
+    //Serial.println("No reply, is there a listener around?");
     oled.refreshIcons();
-    oled.clearMsgArea();  
-    oled.println("No reply, is there a listener around?");
+    oled.clearStatArea();  
+    oled.println("Is there a Xmiter?");
     oled.display();
   }
   delay(5000);

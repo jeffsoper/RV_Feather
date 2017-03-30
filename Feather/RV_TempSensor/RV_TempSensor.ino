@@ -1,4 +1,4 @@
-d#include <SPI.h>
+#include <SPI.h>
 #include <RH_RF95.h>
 #include <Wire.h>
 #include <Adafruit_MCP9808.h>
@@ -96,9 +96,12 @@ class Sensor {
    Setup
 */
 void setup() {
+  pinMode(LED, OUTPUT);
+  digitalWrite(LED, HIGH);
+  
   //while (!Serial);
-  Serial.begin(9600);
-  delay(100);
+  //Serial.begin(9600);
+  //delay(100);
   /*********************************
      setup radio
   */
@@ -107,14 +110,14 @@ void setup() {
   delay(10);
 
   // manual resetradio
-  Serial.println("...reset radio");
+  //Serial.println("...reset radio");
   digitalWrite(RFM95_RST, LOW);
   delay(10);
   digitalWrite(RFM95_RST, HIGH);
   delay(10);
 
   while (!rf95.init()) {
-    Serial.println("LoRa radio init failed");
+    //Serial.println("LoRa radio init failed");
     while (1);
   }
 
@@ -123,10 +126,10 @@ void setup() {
      modulation GFSK_Rb250Fd250, +13dbM
   */
   if (!rf95.setFrequency(RF95_FREQ)) {
-    Serial.println("setFrequency failed");
+    //Serial.println("setFrequency failed");
     while (1);
   }
-  Serial.print("Set Freq to: "); Serial.println(RF95_FREQ);
+  //Serial.print("Set Freq to: "); Serial.println(RF95_FREQ);
 
   /***************************************
     you can set transmitter powers from 5 to 23 dBm:
@@ -143,10 +146,12 @@ void setup() {
      for example
   */
   if (!tempsensor.begin()) {
-    Serial.println("Couldn't find MCP9808!");
+    //Serial.println("Couldn't find MCP9808!");
     while (1);
   }
 
+  digitalWrite(LED, LOW);
+  delay(500);
 }
 
 /*******************************************************
@@ -155,54 +160,56 @@ void setup() {
 void loop() {
   
   // wake up MSP9808 - power consumption ~200 mikro Ampere
-  Serial.println("wake up MCP9808.... "); 
+  //Serial.println("wake up MCP9808.... "); 
   tempsensor.shutdown_wake(0);   // Don't remove this line! required before reading temp
 
   //get the temprature
   float c = tempsensor.readTempC();
   float f = c * 9.0 / 5.0 + 32;
   Sensor temp("temp", f, "F");
-  Serial.println(temp.asString());
-  Serial.println(temp.asJsonStr());
+  //Serial.println(temp.asString());
+  //Serial.println(temp.asJsonStr());
 
   float measuredvbat = analogRead(VBATPIN);
   measuredvbat *= 2;    // we divided by 2, so multiply back
   measuredvbat *= 3.3;  // Multiply by 3.3V, our reference voltage
   measuredvbat /= 1024; // convert to voltage
   Sensor bat("bat", measuredvbat, "V");
-  Serial.println(bat.asString());
-  Serial.println(bat.asJsonStr());
+  //Serial.println(bat.asString());
+  //Serial.println(bat.asJsonStr());
 
-  Serial.println("Sending to rf95_server");
+  //Serial.println("Sending to rf95_server");
 
   String strSend = "{\"UnitID\": 1,\"sensors\":[" + temp.asJsonStr() + "," + bat.asJsonStr() + "]}";
   rf95.send((uint8_t *)strSend.c_str(), strSend.length());
-  Serial.println(strSend);
+  //Serial.println(strSend);
 
-  Serial.println("Waiting for packet to complete..."); delay(10);
+  //Serial.println("Waiting for packet to complete..."); delay(10);
+  digitalWrite(LED, HIGH);
   rf95.waitPacketSent();
+  digitalWrite(LED, LOW);
   // Now wait for a reply
   uint8_t buf[RH_RF95_MAX_MESSAGE_LEN];
   uint8_t len = sizeof(buf);
 
-  Serial.println("Waiting for reply..."); delay(10);
+  //Serial.println("Waiting for reply..."); delay(10);
   if (rf95.waitAvailableTimeout(1000))
   {
     // Should be a reply message for us now
     if (rf95.recv(buf, &len))
     {
-      Serial.println((char*)buf);
-      Serial.print("RSSI: ");
-      Serial.println(rf95.lastRssi(), DEC);
+      //Serial.println((char*)buf);
+      //Serial.print("RSSI: ");
+      //Serial.println(rf95.lastRssi(), DEC);
     }
     else
     {
-      Serial.println("Receive failed");
+      //Serial.println("Receive failed");
     }
   }
   else
   {
-    Serial.println("No temp sensor xmiting");
+    //Serial.println("No temp sensor xmiting");
   }
   delay(5000);
 
